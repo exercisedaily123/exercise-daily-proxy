@@ -1,37 +1,42 @@
-const express = require('express');
-const request = require('request');
-const cors = require('cors');
+const express = require("express");
+const cors = require("cors");
+const axios = require("axios");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 app.use(cors());
 
-app.get('/', (req, res) => {
-  const { url } = req.query;
+app.get("/", async (req, res) => {
+  const targetUrl = req.query.url;
 
-  if (!url) {
+  if (!targetUrl) {
     return res.status(400).send('Missing "url" query parameter');
   }
 
-  const options = {
-    url: url,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Referer': 'https://www.google.com/',
-      'Connection': 'keep-alive'
-    }
-  };
+  try {
+    const response = await axios.get(targetUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+      timeout: 10000,
+    });
 
-  request(options)
-    .on('error', (err) => {
-      res.status(500).send(`Proxy error: ${err.message}`);
-    })
-    .pipe(res);
+    res.set(response.headers);
+    res.status(response.status).send(response.data);
+  } catch (error) {
+    console.error("Error fetching URL:", error.message);
+    res
+      .status(error.response?.status || 500)
+      .send(
+        error.response?.data ||
+          "Error fetching target URL. Amazon might be blocking this proxy."
+      );
+  }
 });
 
 app.listen(PORT, () => {
-  console.log(`Proxy server is running on port ${PORT}`);
+  console.log(`Proxy server running on port ${PORT}`);
 });
