@@ -44,7 +44,7 @@ jobs:
           }
           wp --info
           # Use system tar: WP-CLI 2.12 PHP extractor truncates long archive paths.
-          curl --fail --silent --show-error --location --retry 3 \\
+          curl --fail --silent --show-error --location --retry 3 \
             https://wordpress.org/wordpress-7.1.3.tar.gz -o "$WP_DIR/core.tar.gz"
           tar -xzf "$WP_DIR/core.tar.gz" -C "$WP_DIR" --strip-components=1
           rm "$WP_DIR/core.tar.gz"
@@ -76,3 +76,4 @@ jobs:
             echo "- No repository checkout, private plugin, production data, or account secrets used."
             echo "- This does not test plugin behavior, HTTP/browser flows, packaging, or production."
           } >> "$GITHUB_STEP_SUMMARY"
+
