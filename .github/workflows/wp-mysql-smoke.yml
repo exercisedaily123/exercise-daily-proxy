@@ -37,10 +37,10 @@ jobs:
           trap 'sudo rm -rf "$WP_DIR"' EXIT
           docker pull wordpress:cli-php8.3
           wp() {
-            docker run --rm --network host --user 0:0 \
+            docker run --rm --network host --user 0:0 --entrypoint php \
               --env WP_CLI_ALLOW_ROOT=1 \
               --volume "$WP_DIR:/var/www/html" \
-              wordpress:cli-php8.3 "$@"
+              wordpress:cli-php8.3 -d memory_limit=512M /usr/local/bin/wp "$@"
           }
           wp --info
           wp core download --locale=en_US
