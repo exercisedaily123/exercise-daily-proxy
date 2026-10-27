@@ -1,0 +1,74 @@
+name: Isolated WordPress MySQL smoke test
+
+# Generic disposable test only: no repository checkout, plugin, or real secrets.
+'on':
+  push:
+    branches:
+      - edml-test/wp-mysql-smoke-20261027
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: disposable-root-smoke-only
+          MYSQL_DATABASE: wordpress_smoke
+          MYSQL_USER: smoke
+          MYSQL_PASSWORD: disposable-db-smoke-only
+        ports:
+          - 127.0.0.1:3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    steps:
+      - name: Install WordPress and verify database CRUD
+        shell: bash
+        run: |
+          set -euo pipefail
+          WP_DIR="$(mktemp -d "$RUNNER_TEMP/wp-smoke.XXXXXX")"
+          trap 'sudo rm -rf "$WP_DIR"' EXIT
+          docker pull wordpress:cli-php8.3
+          wp() {
+            docker run --rm --network host --user 0:0 \
+              --env WP_CLI_ALLOW_ROOT=1 \
+              --volume "$WP_DIR:/var/www/html" \
+              wordpress:cli-php8.3 "$@"
+          }
+          wp --info
+          wp core download --locale=en_US
+          wp core verify-checksums
+          wp config create \
+            --dbname=wordpress_smoke --dbuser=smoke \
+            --dbpass=disposable-db-smoke-only \
+            --dbhost=127.0.0.1:3306 --skip-check
+          wp core install \
+            --url=http://wordpress-smoke.invalid \
+            --title="Disposable CI smoke test" \
+            --admin_user=smoke_admin \
+            --admin_password=disposable-admin-smoke-only \
+            --admin_email=smoke@example.invalid --skip-email
+          wp core is-installed
+          wp eval 'global $wpdb; if ((string) $wpdb->get_var("SELECT 1") !== "1") { throw new Exception("Database connection test failed"); } echo "Database connection passed\\n";'
+          POST_ID="$(wp post create --post_type=post --post_status=draft --post_title="Synthetic CI smoke draft" --post_content="Disposable synthetic test content" --porcelain)"
+          [[ "$POST_ID" =~ ^[0-9]+$ ]]
+          test "$(wp post get "$POST_ID" --field=post_status)" = draft
+          test "$(wp post get "$POST_ID" --field=post_title)" = "Synthetic CI smoke draft"
+          test "$(wp post get "$POST_ID" --field=post_content)" = "Disposable synthetic test content"
+          wp post delete "$POST_ID" --force
+          wp eval "if (get_post($POST_ID) !== null) { throw new Exception('Deleted draft still exists'); } echo 'Deletion verified';"
+          {
+            echo "## WordPress/MySQL smoke test passed"
+            echo "- Official MySQL 8.0 and WordPress CLI images; WordPress core checksums verified."
+            echo "- WordPress installation and database connection passed."
+            echo "- Synthetic draft created, read, permanently deleted, and deletion verified."
+            echo "- No repository checkout, private plugin, production data, or account secrets used."
+            echo "- This does not test plugin behavior, HTTP/browser flows, packaging, or production."
+          } >> "$GITHUB_STEP_SUMMARY"
